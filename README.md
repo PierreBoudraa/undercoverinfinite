@@ -2,7 +2,7 @@
 
 Jeu de soirée **Undercover** jouable sur un seul téléphone : on se passe l'appareil, chacun découvre son mot en secret, puis le groupe discute, vote et élimine jusqu'à la victoire d'un camp.
 
-**Démo : [TON-URL.vercel.app](https://TON-URL.vercel.app/)**
+**Démo : [https://undercoverinfinite.vercel.app/](https://undercoverinfinite.vercel.app/)**
 
 ![Capture d'écran](public/screenshots/UndercoverInfinite.png)
 
