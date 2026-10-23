@@ -3,16 +3,51 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import logo from "./apple-icon.png";
-import pairs from "@/data/pairs.json";
-import { createGame, type Player, type Theme } from "@/lib/game";
+import pairsFR from "@/data/pairsFR.json";
+import pairsEN from "@/data/pairsEN.json";
+import pairsES from "@/data/pairsES.json";
+import pairsDE from "@/data/pairsAllemand.json";
+import fr from "@/i18n/fr";
+import en from "@/i18n/en";
+import es from "@/i18n/es";
+import de from "@/i18n/de";
+import {
+  createGame,
+  type PairSet,
+  type Player,
+  type Theme,
+} from "@/lib/game";
 
-const themes = Object.keys(pairs) as (keyof typeof pairs)[];
-const themeOptions: Theme[] = ["all", ...themes];
+const translations = { fr, en, es, de };
+const pairSets: Record<Language, PairSet> = {
+  fr: pairsFR,
+  en: pairsEN,
+  es: pairsES,
+  de: pairsDE,
+};
+const languageOptions = [
+  { value: "fr", label: "Français" },
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "de", label: "Deutsch" },
+] as const;
+type Language = keyof typeof translations;
 const playerCounts = Array.from({ length: 10 }, (_, index) => index + 3);
 const maxUndercoverCount = (nbPlayers: number, withMrWhite: boolean) =>
   withMrWhite
     ? Math.floor((nbPlayers - 3) / 2)
     : Math.floor((nbPlayers - 1) / 2);
+
+function isLanguage(value: string | null): value is Language {
+  return value !== null && Object.hasOwn(translations, value);
+}
+
+function formatText(
+  text: string,
+  values: Record<string, string | number>,
+): string {
+  return text.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key]));
+}
 
 type DropdownOption<T extends string | number> = {
   value: T;
@@ -120,7 +155,15 @@ function CustomDropdown<T extends string | number>({
 }
 
 export default function Home() {
-  const [theme, setTheme] = useState<Theme>(themes[0]);
+  const [language, setLanguage] = useState<Language>("fr");
+  const [languageLoaded, setLanguageLoaded] = useState(false);
+  const pairs = pairSets[language];
+  const themes = Object.keys(pairs);
+  const themeOptions: Theme[] = ["all", ...themes];
+  const t = translations[language];
+  const [theme, setTheme] = useState<Theme>(
+    Object.keys(pairsFR)[0] ?? "all",
+  );
   const [nbPlayers, setNbPlayers] = useState(5);
   const [nbUndercover, setNbUndercover] = useState(1);
   const [withMrWhite, setWithMrWhite] = useState(false);
@@ -143,9 +186,44 @@ export default function Home() {
     "setup" | "dealing" | "complete" | "discussion" | "vote" | "result" | "end"
   >("setup");
 
+  useEffect(() => {
+    const savedLanguage = window.localStorage.getItem("undercover-language");
+    if (isLanguage(savedLanguage)) {
+      setLanguage(savedLanguage);
+      setTheme(Object.keys(pairSets[savedLanguage])[0] ?? "all");
+    }
+    setLanguageLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!languageLoaded) {
+      return;
+    }
+    window.localStorage.setItem("undercover-language", language);
+    document.documentElement.lang = language;
+    document.title = t.pageTitle;
+    const description = document.querySelector('meta[name="description"]');
+    description?.setAttribute("content", t.pageDescription);
+  }, [language, languageLoaded, t]);
+
+  function changeLanguage(nextLanguage: Language) {
+    setLanguage(nextLanguage);
+    setTheme((currentTheme) =>
+      currentTheme === "all"
+        ? currentTheme
+        : Object.keys(pairSets[nextLanguage])[0] ?? "all",
+    );
+  }
+
   function startGame(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    const game = createGame(theme, nbPlayers, nbUndercover, withMrWhite);
+    const game = createGame(
+      theme,
+      nbPlayers,
+      nbUndercover,
+      withMrWhite,
+      pairs,
+    );
     setPlayers(game.players);
     setCivilWord(game.civilWord);
     setEliminated([]);
@@ -251,12 +329,12 @@ export default function Home() {
               setScreen("setup");
               setIsRevealed(false);
             }}
-            aria-label="UndercoverInfinite, accueil"
+            aria-label={t.homeLabel}
           >
             <Image className="brand-logo" src={logo} alt="" />
             UndercoverInfinite
           </button>
-          <span className="header-note">Le jeu des mots cachés</span>
+          <span className="header-note">{t.headerNote}</span>
         </header>
 
         {screen === "setup" && (
@@ -264,39 +342,47 @@ export default function Home() {
             <div className="intro">
               <span className="eyebrow">
                 <span className="eyebrow-dot" aria-hidden="true" />
-                Prêts à jouer ?
+                {t.ready}
               </span>
               <h1 id="page-title">
-                Un mot en commun.
+                {t.heroLine1}
                 <br />
-                <span>Un intrus parmi vous.</span>
+                <span>{t.heroLine2}</span>
               </h1>
-              <p>
-                Choisissez votre thème et distribuez les mots. Saurez-vous
-                démasquer l&apos;Undercover ?
-              </p>
+              <p>{t.introDescription}</p>
             </div>
 
             <form className="setup-card" onSubmit={startGame}>
               <div className="section-heading">
                 <span className="section-number">01</span>
                 <div>
-                  <h2>Préparez la partie</h2>
-                  <p>Les joueurs se passent le téléphone à tour de rôle.</p>
+                  <h2>{t.prepareGame}</h2>
+                  <p>{t.passPhone}</p>
                 </div>
               </div>
 
               <div className="form-fields">
                 <div className="field">
-                  <span className="field-label">
-                    Thème
-                  </span>
+                  <span className="field-label">{t.language}</span>
                   <CustomDropdown
-                    label="Thème"
+                    label={t.language}
+                    options={languageOptions.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    value={language}
+                    onChange={changeLanguage}
+                  />
+                </div>
+
+                <div className="field">
+                  <span className="field-label">{t.theme}</span>
+                  <CustomDropdown
+                    label={t.theme}
                     options={themeOptions.map((themeName) => ({
                       value: themeName,
                       label:
-                        themeName === "all" ? "Tous les thèmes" : themeName,
+                        themeName === "all" ? t.allThemes : themeName,
                     }))}
                     value={theme}
                     onChange={setTheme}
@@ -305,14 +391,15 @@ export default function Home() {
 
                 <div className="field-row">
                   <div className="field">
-                    <span className="field-label">
-                      Joueurs
-                    </span>
+                    <span className="field-label">{t.players}</span>
                     <CustomDropdown
-                      label="Joueurs"
+                      label={t.players}
                       options={playerCounts.map((count) => ({
                         value: count,
-                        label: `${count} joueurs`,
+                        label: formatText(
+                          count === 1 ? t.playerSingular : t.playerPlural,
+                          { count },
+                        ),
                       }))}
                       value={nbPlayers}
                       onChange={(count) => {
@@ -333,11 +420,9 @@ export default function Home() {
                   </div>
 
                   <div className="field">
-                    <span className="field-label">
-                      Undercover
-                    </span>
+                    <span className="field-label">{t.undercover}</span>
                     <CustomDropdown
-                      label="Undercover"
+                      label={t.undercover}
                       options={Array.from(
                         {
                           length: maxUndercoverCount(nbPlayers, withMrWhite),
@@ -345,7 +430,10 @@ export default function Home() {
                         (_, index) => index + 1,
                       ).map((count) => ({
                         value: count,
-                        label: `${count} ${count === 1 ? "joueur" : "joueurs"}`,
+                        label: formatText(
+                          count === 1 ? t.playerSingular : t.playerPlural,
+                          { count },
+                        ),
                       }))}
                       value={nbUndercover}
                       onChange={setNbUndercover}
@@ -356,9 +444,9 @@ export default function Home() {
                 <div
                   className={`mr-white-option${nbPlayers < 5 ? " is-disabled" : ""}`}
                 >
-                  <span className="field-label">Mr White</span>
+                  <span className="field-label">{t.mrWhite}</span>
                   <label className="mr-white-switch">
-                    <span>Activer Mr White</span>
+                    <span>{t.enableMrWhite}</span>
                     <input
                       type="checkbox"
                       checked={withMrWhite}
@@ -378,7 +466,7 @@ export default function Home() {
                   </label>
                   {nbPlayers < 5 && (
                     <span className="mr-white-hint">
-                      Disponible à partir de 5 joueurs.
+                      {t.mrWhiteAvailable}
                     </span>
                   )}
                 </div>
@@ -386,19 +474,26 @@ export default function Home() {
 
               <div className="setup-hint">
                 <span aria-hidden="true">✳</span>
-                Chaque Undercover reçoit un mot différent de celui des civils.
+                {t.setupHint}
               </div>
 
               <button className="button button-primary start-button" type="submit">
-                Lancer
+                {t.launch}
                 <span aria-hidden="true">→</span>
               </button>
             </form>
 
             <p className="footer-note">
-              Un téléphone · {nbPlayers} joueurs · {nbUndercover}{" "}
-              Undercover{nbUndercover > 1 ? "s" : ""}
-              {withMrWhite ? " · Mr White" : ""}
+              {formatText(t.phoneSummary, {
+                players: formatText(
+                  nbPlayers === 1 ? t.playerSingular : t.playerPlural,
+                  { count: nbPlayers },
+                ),
+                undercover: nbUndercover,
+                undercoverRole:
+                  nbUndercover === 1 ? t.undercover : t.undercoverPlural,
+              })}
+              {withMrWhite ? ` · ${t.mrWhite}` : ""}
             </p>
           </section>
         )}
@@ -408,22 +503,22 @@ export default function Home() {
             <div className="distribution-heading">
               <span className="eyebrow">
                 <span className="eyebrow-dot" aria-hidden="true" />
-                Distribution des mots
+                {t.distribution}
               </span>
               <h1 id="page-title">
-                Au tour de
+                {t.turnOf}
                 <br />
-                <span>Joueur {currentPlayer + 1}.</span>
+                <span>
+                  {formatText(t.playerNumber, { number: currentPlayer + 1 })}.
+                </span>
               </h1>
-              <p>
-                Assurez-vous que personne d&apos;autre ne regarde l&apos;écran.
-              </p>
+              <p>{t.keepScreenPrivate}</p>
             </div>
 
             <div
               className="progress-track"
               role="progressbar"
-              aria-label="Progression de la distribution"
+              aria-label={t.distributionProgress}
               aria-valuemin={0}
               aria-valuemax={players.length}
               aria-valuenow={currentPlayer + (isRevealed ? 1 : 0)}
@@ -436,19 +531,22 @@ export default function Home() {
               ))}
             </div>
             <p className="progress-label">
-              Joueur {currentPlayer + 1} <span>/</span> {players.length}
+              {formatText(t.playerProgress, {
+                current: currentPlayer + 1,
+                total: players.length,
+              })}
             </p>
 
             <div className={`word-card${isRevealed ? " is-revealed" : ""}`}>
               <span className="card-overline">
-                {isRevealed ? "Révélation" : "À toi de jouer"}
+                {isRevealed ? t.revelation : t.yourTurn}
               </span>
               {isRevealed ? (
                 players[currentPlayer].role === "mrwhite" ? (
                   <>
-                    <p className="secret-word">Tu es Mr White</p>
+                    <p className="secret-word">{t.youAreMrWhite}</p>
                     <p className="card-caption">
-                      Tu n’as pas de mot. Écoute les autres et devine-le !
+                      {t.mrWhiteInstruction}
                     </p>
                   </>
                 ) : (
@@ -462,7 +560,7 @@ export default function Home() {
                     ••••••••
                   </div>
                   <p className="card-caption">
-                    Appuie quand tu es seul à regarder.
+                    {t.hiddenWordInstruction}
                   </p>
                 </>
               )}
@@ -474,7 +572,7 @@ export default function Home() {
                 type="button"
                 onClick={() => setIsRevealed(true)}
               >
-                Touche pour voir ton mot
+                {t.revealWord}
                 <span aria-hidden="true">↗</span>
               </button>
             ) : (
@@ -483,14 +581,14 @@ export default function Home() {
                 type="button"
                 onClick={advancePlayer}
               >
-                Cacher et passer au suivant
+                {t.hideAndPass}
                 <span aria-hidden="true">→</span>
               </button>
             )}
 
             <p className="privacy-note">
               <span aria-hidden="true">◉</span>
-              Le mot disparaît avant le prochain joueur.
+              {t.wordPrivacy}
             </p>
           </section>
         )}
@@ -502,23 +600,20 @@ export default function Home() {
             </span>
             <span className="eyebrow">
               <span className="eyebrow-dot" aria-hidden="true" />
-              Tout le monde est prêt
+              {t.everyoneReady}
             </span>
             <h1 id="page-title">
-              La distribution
+              {t.distributionTitle}
               <br />
-              <span>est terminée.</span>
+              <span>{t.distributionFinished}</span>
             </h1>
-            <p>
-              Les mots sont distribués. À vous de discuter et de trouver
-              l&apos;Undercover !
-            </p>
+            <p>{t.distributionDescription}</p>
             <button
               className="button button-primary action-button"
               type="button"
               onClick={startDiscussion}
             >
-              Commencer la discussion
+              {t.startDiscussion}
               <span aria-hidden="true">→</span>
             </button>
           </section>
@@ -529,17 +624,14 @@ export default function Home() {
             <div className="round-heading">
               <span className="eyebrow">
                 <span className="eyebrow-dot" aria-hidden="true" />
-                Tour {eliminated.length + 1}
+                {formatText(t.round, { round: eliminated.length + 1 })}
               </span>
               <h1 id="page-title">
-                Discussion
+                {t.discussion}
                 <br />
-                <span>À vous de parler.</span>
+                <span>{t.speakNow}</span>
               </h1>
-              <p>
-                Chacun donne un indice à son tour. Voici l&apos;ordre de passage
-                aléatoire.
-              </p>
+              <p>{t.discussionInstruction}</p>
             </div>
 
             <ol className="player-list discussion-list">
@@ -548,9 +640,11 @@ export default function Home() {
                   <span className="player-number">
                     {String(orderIndex + 1).padStart(2, "0")}
                   </span>
-                  <span className="player-name">Joueur {playerIndex + 1}</span>
+                  <span className="player-name">
+                    {formatText(t.playerNumber, { number: playerIndex + 1 })}
+                  </span>
                   {orderIndex === 0 && (
-                    <span className="player-tag">Commence</span>
+                    <span className="player-tag">{t.playerStarts}</span>
                   )}
                 </li>
               ))}
@@ -564,12 +658,12 @@ export default function Home() {
                 setScreen("vote");
               }}
             >
-              Passer au vote
+              {t.goToVote}
               <span aria-hidden="true">→</span>
             </button>
             <p className="privacy-note">
               <span aria-hidden="true">✳</span>
-              Joueurs en jeu : {discussionOrder.length}
+              {formatText(t.playersInGame, { count: discussionOrder.length })}
             </p>
           </section>
         )}
@@ -579,19 +673,21 @@ export default function Home() {
             <div className="round-heading">
               <span className="eyebrow">
                 <span className="eyebrow-dot" aria-hidden="true" />
-                Tour {eliminated.length + 1}
+                {formatText(t.round, { round: eliminated.length + 1 })}
               </span>
               <h1 id="page-title">
-                Qui est
+                {t.whoIsUndercover}
                 <br />
-                <span>l&apos;Undercover ?</span>
+                <span>{t.undercoverQuestion}</span>
               </h1>
-              <p>
-                Choisissez ensemble le joueur que vous souhaitez éliminer.
-              </p>
+              <p>{t.voteInstruction}</p>
             </div>
 
-            <div className="player-list vote-list" role="group" aria-label="Choisir le joueur à éliminer">
+            <div
+              className="player-list vote-list"
+              role="group"
+              aria-label={t.choosePlayerToEliminate}
+            >
               {players.map((_, playerIndex) => {
                 if (eliminated.includes(playerIndex)) {
                   return null;
@@ -610,7 +706,9 @@ export default function Home() {
                     <span className="player-number">
                       {String(playerIndex + 1).padStart(2, "0")}
                     </span>
-                    <span className="player-name">Joueur {playerIndex + 1}</span>
+                    <span className="player-name">
+                      {formatText(t.playerNumber, { number: playerIndex + 1 })}
+                    </span>
                     <span className="vote-indicator" aria-hidden="true">
                       {isSelected ? "✓" : ""}
                     </span>
@@ -625,8 +723,9 @@ export default function Home() {
               disabled={selectedVote === null}
               onClick={eliminateSelectedPlayer}
             >
-              Éliminer Joueur{" "}
-              {selectedVote === null ? "…" : selectedVote + 1}
+              {formatText(t.eliminatePlayer, {
+                number: selectedVote === null ? "…" : selectedVote + 1,
+              })}
               <span aria-hidden="true">→</span>
             </button>
           </section>
@@ -639,21 +738,21 @@ export default function Home() {
             </span>
             <span className="eyebrow">
               <span className="eyebrow-dot" aria-hidden="true" />
-              Résultat de l&apos;élimination
+              {t.eliminationResult}
             </span>
             <h1 id="page-title">
-              Joueur {lastEliminated + 1}
+              {formatText(t.playerNumber, { number: lastEliminated + 1 })}
               <br />
-              <span>a été éliminé.</span>
+              <span>{t.playerEliminated}</span>
             </h1>
             <div className="result-role-card">
-              <span className="card-overline">Son rôle était</span>
+              <span className="card-overline">{t.roleWas}</span>
               <p className="result-role">
                 {players[lastEliminated].role === "undercover"
-                  ? "Undercover"
+                  ? t.undercover
                   : players[lastEliminated].role === "mrwhite"
-                    ? "Mr White"
-                    : "Civil"}
+                    ? t.mrWhite
+                    : t.civil}
               </p>
               {players[lastEliminated].role !== "mrwhite" && (
                 <p className="result-word">
@@ -668,13 +767,14 @@ export default function Home() {
                 onSubmit={submitMrWhiteGuess}
               >
                 <label className="field-label" htmlFor="mr-white-guess">
-                  Devine le mot des civils
+                  {t.guessCiviliansWord}
                 </label>
                 <input
                   autoComplete="off"
                   className="mr-white-guess-input"
                   id="mr-white-guess"
                   onChange={(event) => setMrWhiteGuess(event.target.value)}
+                  placeholder={t.mrWhiteAnswerPlaceholder}
                   required
                   value={mrWhiteGuess}
                 />
@@ -683,7 +783,7 @@ export default function Home() {
                   type="submit"
                   disabled={mrWhiteGuessCorrect !== null}
                 >
-                  Valider
+                  {t.submit}
                   <span aria-hidden="true">→</span>
                 </button>
               </form>
@@ -692,10 +792,10 @@ export default function Home() {
             {mrWhiteGuessCorrect !== null && (
               <p className="result-message" role="status">
                 {mrWhiteGuessCorrect
-                  ? "Bonne réponse ! Mr White gagne la partie."
+                  ? t.correctGuess
                   : winner
-                    ? "Mauvaise réponse."
-                    : "Mauvaise réponse. La partie continue."}
+                    ? t.wrongGuess
+                    : t.wrongGuessContinues}
               </p>
             )}
             {winner &&
@@ -703,10 +803,10 @@ export default function Home() {
                 mrWhiteGuessCorrect === true) && (
               <p className="result-message">
                 {winner === "civil"
-                  ? "Tous les imposteurs ont été éliminés. Les civils gagnent !"
+                  ? t.civiliansWin
                   : winner === "mrwhite"
-                    ? "Les imposteurs sont au moins aussi nombreux que les civils. Mr White gagne avec les Undercover !"
-                    : "Les imposteurs sont au moins aussi nombreux que les civils. Les Undercover gagnent !"}
+                    ? t.mrWhiteWinsWithUndercover
+                    : t.undercoverWins}
               </p>
             )}
 
@@ -723,7 +823,7 @@ export default function Home() {
                   }
                 }}
               >
-                {winner ? "Voir la fin de partie" : "Continuer la partie"}
+                {winner ? t.viewGameEnd : t.continueGame}
                 <span aria-hidden="true">→</span>
               </button>
             ) : null}
@@ -737,25 +837,27 @@ export default function Home() {
             </span>
             <span className="eyebrow">
               <span className="eyebrow-dot" aria-hidden="true" />
-              Fin de partie
+              {t.gameOver}
             </span>
             <h1 id="page-title">
               {winner === "civil"
-                ? "Les civils"
+                ? t.civilians
                 : winner === "mrwhite"
-                  ? "Mr White"
-                  : "Les Undercover"}
+                  ? t.mrWhite
+                  : t.undercovers}
               <br />
-              <span>{winner === "mrwhite" ? "a gagné !" : "ont gagné !"}</span>
+              <span>
+                {winner === "mrwhite" ? t.mrWhiteWon : t.teamWon}
+              </span>
             </h1>
 
             <div className="final-words">
               <div className="result-role-card">
-                <span className="card-overline">Mot des civils</span>
+                <span className="card-overline">{t.civiliansWord}</span>
                 <p className="result-role">{civilWord}</p>
               </div>
               <div className="result-role-card">
-                <span className="card-overline">Mot des Undercover</span>
+                <span className="card-overline">{t.undercoversWord}</span>
                 <p className="result-role">
                   {players.find((player) => player.role === "undercover")?.word}
                 </p>
@@ -768,13 +870,15 @@ export default function Home() {
                   <span className="player-number">
                     {String(playerIndex + 1).padStart(2, "0")}
                   </span>
-                  <span className="player-name">Joueur {playerIndex + 1}</span>
+                  <span className="player-name">
+                    {formatText(t.playerNumber, { number: playerIndex + 1 })}
+                  </span>
                   <span className="player-tag">
                     {player.role === "mrwhite"
-                      ? "Mr White"
+                      ? t.mrWhite
                       : player.role === "undercover"
-                        ? "Undercover"
-                        : "Civil"}
+                        ? t.undercover
+                        : t.civil}
                   </span>
                 </li>
               ))}
@@ -785,7 +889,7 @@ export default function Home() {
               type="button"
               onClick={() => startGame()}
             >
-              Rejouer avec les mêmes réglages
+              {t.replaySameSettings}
               <span aria-hidden="true">↻</span>
             </button>
             <button
@@ -796,14 +900,14 @@ export default function Home() {
                 setIsRevealed(false);
               }}
             >
-              Nouvelle partie
+              {t.newGame}
               <span aria-hidden="true">→</span>
             </button>
           </section>
         )}
         <footer className="site-footer">
           <span>UndercoverInfinite</span>
-          <span>À vous de jouer.</span>
+          <span>{t.footerNote}</span>
         </footer>
       </div>
     </main>

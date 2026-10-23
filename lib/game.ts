@@ -1,7 +1,6 @@
-import pairs from "@/data/pairs.json";
-
-export type Theme = keyof typeof pairs | "all";
+export type Theme = string | "all";
 export type PlayerRole = "civil" | "undercover" | "mrwhite";
+export type PairSet = Record<string, string[][]>;
 
 export type Player = {
   role: PlayerRole;
@@ -18,6 +17,7 @@ export function createGame(
   nbPlayers: number,
   nbUndercover: number,
   withMrWhite: boolean,
+  pairs: PairSet,
 ): Game {
   if (!Number.isSafeInteger(nbPlayers) || nbPlayers <= 2) {
     throw new RangeError("nbPlayers must be an integer greater than or equal to 3.");
@@ -49,9 +49,8 @@ export function createGame(
     );
   }
 
-  const themePairs =
-    theme === "all" ? Object.values(pairs).flat() : pairs[theme];
-  if (themePairs.length === 0) {
+  const themePairs = theme === "all" ? Object.values(pairs).flat() : pairs[theme];
+  if (!themePairs || themePairs.length === 0) {
     throw new Error(`Theme "${theme}" does not contain any word pairs.`);
   }
 
